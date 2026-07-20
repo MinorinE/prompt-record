@@ -231,6 +231,15 @@
   .field-label {
     display: flex; align-items: baseline; gap: 1em; margin-bottom: 14px;
   }
+  .field-label-mt { margin-top: 22px; }
+  .title-input {
+    width: 100%; background: var(--panel); border: 1px solid var(--line);
+    color: var(--ink); font-family: var(--cn); font-size: 1.15rem; font-weight: 600;
+    padding: 14px 18px; letter-spacing: 0.04em;
+    transition: border-color 0.3s, background 0.3s;
+  }
+  .title-input:focus { outline: none; border-color: var(--amber); background: var(--panel-2); }
+  .title-input::placeholder { color: var(--ink-faint); font-weight: 300; font-style: italic; }
   textarea {
     flex: 1; width: 100%; min-height: 200px;
     background: var(--panel); border: 1px solid var(--line);
@@ -332,6 +341,14 @@
   }
   .plate:hover .plate-img-wrap::after { opacity: 0.8; }
 
+  .plate-title {
+    font-family: var(--cn); font-size: 1.1rem; font-weight: 600;
+    color: var(--ink); letter-spacing: 0.03em; line-height: 1.4;
+    margin-bottom: 12px; padding: 0 2px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
   .plate-caption {
     font-family: var(--cn); font-size: 0.95rem; line-height: 1.7;
     color: var(--ink); margin-top: 14px; padding: 0 2px;
@@ -396,6 +413,12 @@
     display: flex; gap: 1em; font-family: var(--mono); font-size: 0.65rem;
     color: var(--amber); letter-spacing: 0.18em; text-transform: uppercase;
   }
+  .lb-title {
+    font-family: var(--cn); font-size: 1.3rem; font-weight: 600;
+    color: var(--ink); letter-spacing: 0.03em; max-width: 600px;
+    text-align: center; line-height: 1.4;
+  }
+  .lb-title:empty { display: none; }
   .lb-caption {
     font-family: var(--cn); font-size: 1rem; color: var(--ink);
     max-width: 600px; text-align: center; line-height: 1.7;
@@ -462,7 +485,7 @@
             <span class="title-cn">暗房</span>
             <span class="title-en">DARKROOM</span>
           </h1>
-          <p class="subtitle">影像与注记 <span class="dot">·</span> 本地档案 <span class="dot">·</span> visual archive</p>
+          <p class="subtitle">NovelAI 提示词记录 <span class="dot">·</span> 本地档案 <span class="dot">·</span> prompt recorder</p>
         </div>
         <div class="meta-block">
           <div class="counter">
@@ -498,9 +521,14 @@
           <div class="form-right">
             <div class="field-label">
               <span class="step">02</span>
-              <span class="label-text">注记 <em>· caption</em></span>
+              <span class="label-text">标题 <em>· title</em></span>
             </div>
-            <textarea id="caption" placeholder="为这张影像写点什么……&#10;a note to accompany the frame" rows="6"></textarea>
+            <input type="text" id="title" class="title-input" placeholder="给这条提示词起个名字……&#10;a name for this prompt" autocomplete="off">
+            <div class="field-label field-label-mt">
+              <span class="step">03</span>
+              <span class="label-text">描述 <em>· description</em></span>
+            </div>
+            <textarea id="caption" placeholder="粘贴 NovelAI 提示词，或写点什么……&#10;paste your NovelAI prompt, or write a note" rows="6"></textarea>
             <div class="form-actions">
               <button class="btn-develop" id="developBtn" disabled><span>显影 / develop</span></button>
               <button class="btn-clear" id="clearBtn">清空 · clear</button>
@@ -525,7 +553,7 @@
     </main>
 
     <footer>
-      <p>本地存储 <span class="dot">·</span> stored in your browser via IndexedDB <span class="dot">·</span> no server, no upload</p>
+      <p>NovelAI 提示词本地记录 <span class="dot">·</span> stored in your browser via IndexedDB <span class="dot">·</span> no server, no upload</p>
     </footer>
   </div>
 
@@ -536,6 +564,7 @@
         <span id="lbNum"></span>
         <span id="lbDate"></span>
       </div>
+      <p class="lb-title" id="lbTitle"></p>
       <p class="lb-caption" id="lbCaption"></p>
     </div>
     <button class="lb-close" id="lbClose" aria-label="close">×</button>
@@ -568,10 +597,10 @@
       req.onerror = function () { reject(req.error); };
     });
   }
-  function addPlate(blob, text) {
+  function addPlate(blob, title, text) {
     return new Promise(function (resolve, reject) {
       var tx = db.transaction(STORE, 'readwrite');
-      var req = tx.objectStore(STORE).add({ image: blob, text: text || '', timestamp: Date.now() });
+      var req = tx.objectStore(STORE).add({ image: blob, title: title || '', text: text || '', timestamp: Date.now() });
       req.onsuccess = function () { resolve(req.result); };
       req.onerror = function () { reject(req.error); };
     });
@@ -661,6 +690,7 @@
   var dropEmpty = $('#dropEmpty'), dropPreview = $('#dropPreview');
   var previewImg = $('#previewImg'), previewClear = $('#previewClear');
   var caption = $('#caption'), developBtn = $('#developBtn'), clearBtn = $('#clearBtn');
+  var titleInput = $('#title');
   var platesEl = $('#plates'), emptyState = $('#emptyState');
   var countEl = $('#count'), todayEl = $('#today');
   var toast = $('#toast'), lightbox = $('#lightbox');
@@ -728,6 +758,7 @@
           '<span class="plate-time">' + f.time + '</span>' +
           '<button class="plate-del" title="删除" aria-label="delete">×</button>' +
         '</div>' +
+        (p.title ? '<div class="plate-title">' + escapeHtml(p.title) + '</div>' : '') +
         '<div class="plate-img-wrap"><img src="' + url + '" alt="plate ' + p.id + '" loading="lazy"></div>' +
         (p.text ? '<div class="plate-caption">' + escapeHtml(p.text) + '</div>' : '');
 
@@ -770,6 +801,7 @@
     $('#lbImg').src = url;
     $('#lbNum').textContent = '№' + pad(p.id, 3);
     $('#lbDate').textContent = f.date + ' · ' + f.time;
+    $('#lbTitle').textContent = p.title || '';
     $('#lbCaption').textContent = p.text || '';
     lightbox.classList.add('show');
     lightbox.setAttribute('aria-hidden', 'false');
@@ -784,7 +816,7 @@
     if (!pendingBlob) return;
     developBtn.disabled = true;
     developBtn.classList.add('loading');
-    addPlate(pendingBlob, caption.value.trim()).then(function (id) {
+    addPlate(pendingBlob, titleInput.value.trim(), caption.value.trim()).then(function (id) {
       return getAllPlates().then(function (plates) {
         renderPlates(plates, id);
         resetForm();
@@ -798,6 +830,7 @@
   }
   function resetForm() {
     setPending(null);
+    titleInput.value = '';
     caption.value = '';
     caption.blur();
   }
@@ -829,7 +862,7 @@
   });
 
   document.addEventListener('paste', function (e) {
-    if (document.activeElement === caption) return;
+    if (document.activeElement === caption || document.activeElement === titleInput) return;
     var items = e.clipboardData && e.clipboardData.items;
     if (!items) return;
     for (var i = 0; i < items.length; i++) {
@@ -842,9 +875,11 @@
 
   developBtn.addEventListener('click', develop);
   clearBtn.addEventListener('click', resetForm);
-  caption.addEventListener('keydown', function (e) {
+  function submitOnCtrlEnter(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); develop(); }
-  });
+  }
+  caption.addEventListener('keydown', submitOnCtrlEnter);
+  titleInput.addEventListener('keydown', submitOnCtrlEnter);
 
   $('#lbClose').addEventListener('click', closeLightbox);
   lightbox.addEventListener('click', function (e) { if (e.target === lightbox) closeLightbox(); });
